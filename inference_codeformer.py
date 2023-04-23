@@ -52,7 +52,7 @@ def set_realesrgan():
                         category=RuntimeWarning)
     return upsampler
 
-def process_images(pipe, img, mask, input_path, output_path=None, fidelity_weight=0.5, upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
+def process_images(pipe, img, mask, condition_img, prompt, negative_prompt, input_path, output_path=None, fidelity_weight=0.5, upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
     device = get_device()
 
     w = fidelity_weight
@@ -111,7 +111,7 @@ def process_images(pipe, img, mask, input_path, output_path=None, fidelity_weigh
         face_helper.read_image(img)
         # get face landmarks for each face
         num_det_faces = face_helper.get_face_landmarks_5(
-            only_center_face=only_center_face, resize=640, eye_dist_threshold=5)
+            only_center_face=only_center_face, resize=640, eye_dist_threshold=5, input_mask= mask, condition_img = condition_img )
         print(f'\tdetect {num_det_faces} faces')
         # align and warp each face
         face_helper.align_warp_face()
@@ -120,6 +120,20 @@ def process_images(pipe, img, mask, input_path, output_path=None, fidelity_weigh
         for idx, cropped_face in enumerate(face_helper.cropped_faces):
             # prepare data
             mask_crop = face_helper.cropped_masks[idx]
+            condition_crop = face_helper.cropped_conditions[idx]
+
+            cropped_face = pipe(
+            prompt = prompt,
+            image = cropped_face,
+            strength = 1,
+            negative_prompt= negative_prompt,
+            mask_image = mask_crop,
+            guidance_scale = 7,
+            controlnet_conditioning_image = condition_crop,
+            controlnet_conditioning_scale=0.7,
+            num_inference_steps=30
+            ).images[0]
+
             cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
             normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
             cropped_face_t = cropped_face_t.unsqueeze(0).to(device)
@@ -136,6 +150,7 @@ def process_images(pipe, img, mask, input_path, output_path=None, fidelity_weigh
 
             restored_face = restored_face.astype('uint8')
             face_helper.add_restored_face(restored_face, cropped_face)
+            break
 
         # paste_back
         if not has_aligned:
@@ -152,47 +167,28 @@ def process_images(pipe, img, mask, input_path, output_path=None, fidelity_weigh
             else:
                 restored_img = face_helper.paste_faces_to_input_image(upsample_img=bg_img, draw_box=draw_box)
 
-        # save faces
-        for idx, (cropped_face, restored_face) in enumerate(zip(face_helper.cropped_faces, face_helper.restored_faces)):
-            # save cropped face
-            if not has_aligned: 
-                save_crop_path = os.path.join(result_root, 'cropped_faces', f'{basename}_{idx:02d}.png')
-                imwrite(cropped_face, save_crop_path)
-            # save restored face
-            if has_aligned:
-                save_face_name = f'{basename}.png'
-            else:
-                save_face_name = f'{basename}_{idx:02d}.png'
-            if suffix is not None:
-                save_face_name = f'{save_face_name[:-4]}_{suffix}.png'
-            save_restore_path = os.path.join(result_root, 'restored_faces', save_face_name)
-            imwrite(restored_face, save_restore_path)
+        # # save faces
+        # for idx, (cropped_face, restored_face) in enumerate(zip(face_helper.cropped_faces, face_helper.restored_faces)):
+        #     # save cropped face
+        #     if not has_aligned: 
+        #         save_crop_path = os.path.join(result_root, 'cropped_faces', f'{basename}_{idx:02d}.png')
+        #         imwrite(cropped_face, save_crop_path)
+        #     # save restored face
+        #     if has_aligned:
+        #         save_face_name = f'{basename}.png'
+        #     else:
+        #         save_face_name = f'{basename}_{idx:02d}.png'
+        #     if suffix is not None:
+        #         save_face_name = f'{save_face_name[:-4]}_{suffix}.png'
+        #     save_restore_path = os.path.join(result_root, 'restored_faces', save_face_name)
+        #     imwrite(restored_face, save_restore_path)
 
         # save restored img
         if not has_aligned and restored_img is not None:
-            if suffix is not None:
-                basename = f'{basename}_{suffix}'
-            save_restore_path = os.path.join(result_root, 'final_results', f'{basename}.png')
-            imwrite(restored_img, save_restore_path)
-
-    # save enhanced video
-    if input_video:
-        print('Video Saving...')
-        # load images
-        video_frames = []
-        img_list = sorted(glob.glob(os.path.join(result_root, 'final_results', '*.[jp][pn]g')))
-        for img_path in img_list:
-            img = cv2.imread(img_path)
-            video_frames.append(img)
-        # write images to video
-        height, width = video_frames[0].shape[:2]
-        if suffix is not None:
-            video_name = f'{video_name}_{suffix}.png'
-        save_restore_path = os.path.join(result_root, f'{video_name}.mp4')
-        vidwriter = VideoWriter(save_restore_path, height, width, fps, audio)
-         
-        for f in video_frames:
-            vidwriter.write_frame(f)
-        vidwriter.close()
-
-    print(f'\nAll results are saved in {result_root}')
+            # if suffix is not None:
+            #     basename = f'{basename}_{suffix}'
+            # save_restore_path = os.path.join(result_root, 'final_results', f'{basename}.png')
+            # imwrite(restored_img, save_restore_path)
+            return restored_img
+        else:
+            return None

@@ -105,6 +105,8 @@ class FaceRestoreHelper(object):
         self.affine_matrices = []
         self.inverse_affine_matrices = []
         self.cropped_faces = []
+        self.cropped_masks = []
+        self.cropped_conditions = []
         self.restored_faces = []
         self.pad_input_imgs = []
 
@@ -199,7 +201,11 @@ class FaceRestoreHelper(object):
                              resize=None,
                              blur_ratio=0.01,
                              eye_dist_threshold=None,
-                             input_mask=None):
+                             input_mask=None,
+                             condition_mask = None):
+
+        self.input_mask = input_mask
+        self.condition_mask = condition_mask
         if self.det_model == 'dlib':
             return self.get_face_landmarks_5_dlib(only_keep_largest)
 
@@ -250,6 +256,7 @@ class FaceRestoreHelper(object):
         if self.pad_blur:
             self.pad_input_imgs = []
             self.pad_input_masks = [] if input_mask is not None else None
+            self.condition_input_masks = [] if condition_mask is not None else None
             for landmarks in self.all_landmarks_5:
                 # get landmarks
                 eye_left = landmarks[0, :]
@@ -293,6 +300,7 @@ class FaceRestoreHelper(object):
                     
                     # pad image
                     pad_img = np.pad(self.input_img, ((pad[1], pad[3]), (pad[0], pad[2]), (0, 0)), 'reflect')
+                    pad_condition = np.pad(condition_mask, ((pad[1], pad[3]), (pad[0], pad[2]), (0, 0)), 'reflect')
                     if input_mask is not None:
                         pad_mask = np.pad(input_mask, ((pad[1], pad[3]), (pad[0], pad[2])), 'reflect')
 
@@ -317,10 +325,17 @@ class FaceRestoreHelper(object):
                     pad_img += (np.median(pad_img, axis=(0, 1)) - pad_img) * np.clip(mask, 0.0, 1.0)
                     pad_img = np.clip(pad_img, 0, 255)  # float32, [0, 255]
                     self.pad_input_imgs.append(pad_img)
+
+                    pad_condition = pad_condition.astype('float32')
+                    pad_condition += (blur_img - pad_condition) * np.clip(mask * 3.0 + 1.0, 0.0, 1.0)
+                    pad_conditiong += (np.median(pad_condition, axis=(0, 1)) - pad_condition) * np.clip(mask, 0.0, 1.0)
+                    pad_condition = np.clip(pad_condition, 0, 255)  # float32, [0, 255]
+                    self.condition_input_masks.append(pad_condition)
                     if input_mask is not None:
                         self.pad_input_masks.append(pad_mask)
                 else:
                     self.pad_input_imgs.append(np.copy(self.input_img))
+                    self.condition_input_masks.append(np.copy(condition_mask))
                     if input_mask is not None:
                         self.pad_input_masks.append(np.copy(input_mask))
 
@@ -350,20 +365,28 @@ class FaceRestoreHelper(object):
 
         if self.pad_blur:
             input_img = self.pad_input_imgs[idx]
+            condition_mask = self.condition_input_masks[idx]
             if self.pad_input_masks is not None:
                 input_mask = self.pad_input_masks[idx]
         else:
             input_img = self.input_img
+            condition_mask = self.condition_mask
             input_mask = None if self.input_mask is None else self.input_mask
 
         cropped_face = cv2.warpAffine(
             input_img, affine_matrix, self.face_size, borderMode=border_mode, borderValue=(135, 133, 132))  # gray
+        
+        cropped_condition = cv2.warpAffine(
+            condition_mask, affine_matrix, self.face_size, borderMode=border_mode, borderValue=(135, 133, 132))  # gray
 
+        
         if input_mask is not None:
             cropped_mask = cv2.warpAffine(
                 input_mask, affine_matrix, self.face_size, borderMode=border_mode, borderValue=0)  # black
 
         self.cropped_faces.append(cropped_face)
+        self.cropped_conditions.append(cropped_condition)
+
         if input_mask is not None:
             self.cropped_masks.append(cropped_mask)
 
@@ -373,7 +396,7 @@ class FaceRestoreHelper(object):
             save_path = f'{path}_{idx:02d}.{self.save_ext}'
             imwrite(cropped_face, save_path)
 
-            if save_mask_path is not None and input_mask is not None:
+            if save_mask_path is not None and self.input_mask is not None:
                 mask_path = os.path.splitext(save_mask_path)[0]
                 save_mask_path = f'{mask_path}_{idx:02d}.png'
                 cv2.imwrite(save_mask_path, cropped_mask)
