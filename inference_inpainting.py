@@ -11,6 +11,12 @@ from basicsr.utils.registry import ARCH_REGISTRY
 
 pretrain_model_url = 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer_inpainting.pth'
 
+
+def dummy():
+    q = 1
+    device = get_device()
+    print(q)
+
 if __name__ == '__main__':
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = get_device()
