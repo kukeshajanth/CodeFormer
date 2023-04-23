@@ -377,12 +377,12 @@ class FaceRestoreHelper(object):
             input_img, affine_matrix, self.face_size, borderMode=border_mode, borderValue=(135, 133, 132))  # gray
         
         cropped_condition = cv2.warpAffine(
-            np.array(condition_mask), affine_matrix, self.face_size, borderMode=border_mode, borderValue=0)  # gray
+            condition_mask, affine_matrix, self.face_size, borderMode=border_mode, borderValue=0)  # gray
 
         
         if input_mask is not None:
             cropped_mask = cv2.warpAffine(
-                np.array(input_mask), affine_matrix, self.face_size, borderMode=border_mode, borderValue=0)  # black
+                input_mask, affine_matrix, self.face_size, borderMode=border_mode, borderValue=0)  # black
 
         self.cropped_faces.append(cropped_face)
         self.cropped_conditions.append(cropped_condition)

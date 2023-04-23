@@ -122,12 +122,12 @@ def process_images(pipe, img, mask, condition_img, prompt, negative_prompt, fide
 
         cropped_face = pipe(
         prompt = prompt,
-        image = cropped_face,
+        image = Image.fromarray(cropped_face),
         strength = 1,
         negative_prompt= negative_prompt,
-        mask_image = mask_crop,
+        mask_image = Image.fromarray(mask_crop),
         guidance_scale = 7,
-        controlnet_conditioning_image = condition_crop,
+        controlnet_conditioning_image = Image.fromarray(condition_crop),
         controlnet_conditioning_scale=0.7,
         num_inference_steps=30
         ).images[0]
