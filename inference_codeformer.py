@@ -52,7 +52,7 @@ def set_realesrgan():
                         category=RuntimeWarning)
     return upsampler
 
-def process_images(pipe, img, mask, condition_img, prompt, negative_prompt, fidelity_weight=0.5, upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
+def process_images(pipe, img, mask, condition_img, prompt, negative_prompt, fidelity_weight=0.5 , upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
     device = get_device()
 
     w = fidelity_weight
