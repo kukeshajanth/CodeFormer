@@ -198,7 +198,8 @@ class FaceRestoreHelper(object):
                              only_center_face=False,
                              resize=None,
                              blur_ratio=0.01,
-                             eye_dist_threshold=None):
+                             eye_dist_threshold=None,
+                             input_mask=None):
         if self.det_model == 'dlib':
             return self.get_face_landmarks_5_dlib(only_keep_largest)
 
@@ -248,6 +249,7 @@ class FaceRestoreHelper(object):
         # pad blurry images
         if self.pad_blur:
             self.pad_input_imgs = []
+            self.pad_input_masks = [] if input_mask is not None else None
             for landmarks in self.all_landmarks_5:
                 # get landmarks
                 eye_left = landmarks[0, :]
@@ -288,8 +290,12 @@ class FaceRestoreHelper(object):
                 ]
 
                 if max(pad) > 1:
+                    
                     # pad image
                     pad_img = np.pad(self.input_img, ((pad[1], pad[3]), (pad[0], pad[2]), (0, 0)), 'reflect')
+                    if input_mask is not None:
+                        pad_mask = np.pad(input_mask, ((pad[1], pad[3]), (pad[0], pad[2])), 'reflect')
+
                     # modify landmark coords
                     landmarks[:, 0] += pad[0]
                     landmarks[:, 1] += pad[1]
@@ -311,8 +317,12 @@ class FaceRestoreHelper(object):
                     pad_img += (np.median(pad_img, axis=(0, 1)) - pad_img) * np.clip(mask, 0.0, 1.0)
                     pad_img = np.clip(pad_img, 0, 255)  # float32, [0, 255]
                     self.pad_input_imgs.append(pad_img)
+                    if input_mask is not None:
+                        self.pad_input_masks.append(pad_mask)
                 else:
                     self.pad_input_imgs.append(np.copy(self.input_img))
+                    if input_mask is not None:
+                        self.pad_input_masks.append(np.copy(input_mask))
 
         return len(self.all_landmarks_5)
 
@@ -322,6 +332,8 @@ class FaceRestoreHelper(object):
         if self.pad_blur:
             assert len(self.pad_input_imgs) == len(
                 self.all_landmarks_5), f'Mismatched samples: {len(self.pad_input_imgs)} and {len(self.all_landmarks_5)}'
+            if self.pad_input_masks is not None:
+                assert len(self.pad_input_masks) == len(self.all_landmarks_5)
         for idx, landmark in enumerate(self.all_landmarks_5):
             # use 5 landmarks to get affine matrix
             # use cv2.LMEDS method for the equivalence to skimage transform
@@ -335,18 +347,36 @@ class FaceRestoreHelper(object):
                 border_mode = cv2.BORDER_REFLECT101
             elif border_mode == 'reflect':
                 border_mode = cv2.BORDER_REFLECT
-            if self.pad_blur:
-                input_img = self.pad_input_imgs[idx]
-            else:
-                input_img = self.input_img
-            cropped_face = cv2.warpAffine(
-                input_img, affine_matrix, self.face_size, borderMode=border_mode, borderValue=(135, 133, 132))  # gray
-            self.cropped_faces.append(cropped_face)
-            # save the cropped face
-            if save_cropped_path is not None:
-                path = os.path.splitext(save_cropped_path)[0]
-                save_path = f'{path}_{idx:02d}.{self.save_ext}'
-                imwrite(cropped_face, save_path)
+
+        if self.pad_blur:
+            input_img = self.pad_input_imgs[idx]
+            if self.pad_input_masks is not None:
+                input_mask = self.pad_input_masks[idx]
+        else:
+            input_img = self.input_img
+            input_mask = None if self.input_mask is None else self.input_mask
+
+        cropped_face = cv2.warpAffine(
+            input_img, affine_matrix, self.face_size, borderMode=border_mode, borderValue=(135, 133, 132))  # gray
+
+        if input_mask is not None:
+            cropped_mask = cv2.warpAffine(
+                input_mask, affine_matrix, self.face_size, borderMode=border_mode, borderValue=0)  # black
+
+        self.cropped_faces.append(cropped_face)
+        if input_mask is not None:
+            self.cropped_masks.append(cropped_mask)
+
+        # save the cropped face and mask
+        if save_cropped_path is not None:
+            path = os.path.splitext(save_cropped_path)[0]
+            save_path = f'{path}_{idx:02d}.{self.save_ext}'
+            imwrite(cropped_face, save_path)
+
+            if save_mask_path is not None and input_mask is not None:
+                mask_path = os.path.splitext(save_mask_path)[0]
+                save_mask_path = f'{mask_path}_{idx:02d}.png'
+                cv2.imwrite(save_mask_path, cropped_mask)
 
     def get_inverse_affine(self, save_inverse_affine_path=None):
         """Get inverse affine matrix."""

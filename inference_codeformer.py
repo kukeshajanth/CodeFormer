@@ -38,7 +38,7 @@ def set_realesrgan():
         scale=2,
         model_path="https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/RealESRGAN_x2plus.pth",
         model=model,
-        tile=bg_tile,
+        tile=400,
         tile_pad=40,
         pre_pad=0,
         half=use_half
@@ -52,43 +52,11 @@ def set_realesrgan():
                         category=RuntimeWarning)
     return upsampler
 
-def process_images(input_path, output_path=None, fidelity_weight=0.5, upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
+def process_images(pipe, img, mask, input_path, output_path=None, fidelity_weight=0.5, upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
     device = get_device()
 
     w = fidelity_weight
 
-    input_video = False
-    if input_path.endswith(('jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG')): # input single img path
-        input_img_list = [input_path]
-        result_root = f'results/test_img_{w}'
-    elif input_path.endswith(('mp4', 'mov', 'avi', 'MP4', 'MOV', 'AVI')): # input video path
-        from basicsr.utils.video_util import VideoReader, VideoWriter
-        input_img_list = []
-        vidreader = VideoReader(input_path)
-        image = vidreader.get_frame()
-        while image is not None:
-            input_img_list.append(image)
-            image = vidreader.get_frame()
-        audio = vidreader.get_audio()
-        fps = vidreader.get_fps() if save_video_fps is None else save_video_fps   
-        video_name = os.path.basename(input_path)[:-4]
-        result_root = f'results/{video_name}_{w}'
-        input_video = True
-        vidreader.close()
-    else: # input img folder
-        if input_path.endswith('/'):  # solve when path ends with /
-            input_path = input_path[:-1]
-        # scan all the jpg and png images
-        input_img_list = sorted(glob.glob(os.path.join(input_path, '*.[jpJP][pnPN]*[gG]')))
-        result_root = f'results/{os.path.basename(input_path)}_{w}'
-
-    if not output_path is None: # set output path
-        result_root = output_path
-
-    test_img_num = len(input_img_list)
-    if test_img_num == 0:
-        raise FileNotFoundError('No input image/video is found...\n' 
-            '\tNote that --input_path for video should end with .mp4|.mov|.avi')
 
     # ------------------ set up background upsampler ------------------
     if bg_upsampler == 'realesrgan':
@@ -139,37 +107,19 @@ def process_images(input_path, output_path=None, fidelity_weight=0.5, upscale=2,
     for i, img_path in enumerate(input_img_list):
         # clean all the intermediate results to process the next image
         face_helper.clean_all()
-        
-        if isinstance(img_path, str):
-            img_name = os.path.basename(img_path)
-            basename, ext = os.path.splitext(img_name)
-            print(f'[{i+1}/{test_img_num}] Processing: {img_name}')
-            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        else: # for video processing
-            basename = str(i).zfill(6)
-            img_name = f'{video_name}_{basename}' if input_video else basename
-            print(f'[{i+1}/{test_img_num}] Processing: {img_name}')
-            img = img_path
 
-        if has_aligned: 
-            # the input faces are already cropped and aligned
-            img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_LINEAR)
-            face_helper.is_gray = is_gray(img, threshold=10)
-            if face_helper.is_gray:
-                print('Grayscale input: True')
-            face_helper.cropped_faces = [img]
-        else:
-            face_helper.read_image(img)
-            # get face landmarks for each face
-            num_det_faces = face_helper.get_face_landmarks_5(
-                only_center_face=only_center_face, resize=640, eye_dist_threshold=5)
-            print(f'\tdetect {num_det_faces} faces')
-            # align and warp each face
-            face_helper.align_warp_face()
+        face_helper.read_image(img)
+        # get face landmarks for each face
+        num_det_faces = face_helper.get_face_landmarks_5(
+            only_center_face=only_center_face, resize=640, eye_dist_threshold=5)
+        print(f'\tdetect {num_det_faces} faces')
+        # align and warp each face
+        face_helper.align_warp_face()
 
         # face restoration for each cropped face
         for idx, cropped_face in enumerate(face_helper.cropped_faces):
             # prepare data
+            mask_crop = face_helper.cropped_masks[idx]
             cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
             normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
             cropped_face_t = cropped_face_t.unsqueeze(0).to(device)
