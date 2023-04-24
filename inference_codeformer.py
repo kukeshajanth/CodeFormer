@@ -53,7 +53,7 @@ def set_realesrgan():
                         category=RuntimeWarning)
     return upsampler
 
-def process_images(pipe, img, mask, condition_img, prompt, negative_prompt, fidelity_weight=0.5 , upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
+def process_images(pipe, img, mask, condition_img, prompt, negative_prompt,num_inference_steps=50, guidance_scale = 7, controlnet_conditioning_scale=0.7, fidelity_weight=0.5 , upscale=2, has_aligned=False, only_center_face=False, draw_box=False, detection_model='retinaface_resnet50', bg_upsampler=None, face_upsample=False, bg_tile=400, suffix=None, save_video_fps=None):
     device = get_device()
 
     w = fidelity_weight
@@ -127,12 +127,15 @@ def process_images(pipe, img, mask, condition_img, prompt, negative_prompt, fide
         strength = 1,
         negative_prompt= negative_prompt,
         mask_image = Image.fromarray(mask_crop),
-        guidance_scale = 7,
+        guidance_scale = guidance_scale,
         controlnet_conditioning_image = Image.fromarray(condition_crop),
-        controlnet_conditioning_scale=0.7,
-        num_inference_steps=30
+        controlnet_conditioning_scale=controlnet_conditioning_scale,
+        num_inference_steps=num_inference_steps
         ).images[0]
 
+        cropped_face.to_save('/content/cropped_face.png')
+        Image.fromarray(mask_crop).to_save('/content/cropped_mask_face.png')
+        Image.fromarray(condition_crop).to_save('/content/cropped_cond_face.png')
         cropped_face = np.array(cropped_face)
 
         cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
