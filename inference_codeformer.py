@@ -9,6 +9,7 @@ from basicsr.utils.download_util import load_file_from_url
 from basicsr.utils.misc import gpu_is_available, get_device
 from facelib.utils.face_restoration_helper import FaceRestoreHelper
 from facelib.utils.misc import is_gray
+from PIL import Image
 
 from basicsr.utils.registry import ARCH_REGISTRY
 
