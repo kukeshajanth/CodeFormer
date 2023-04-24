@@ -126,7 +126,7 @@ def process_images(pipe, img, mask, condition_img, prompt, negative_prompt,num_i
         image = Image.fromarray(cropped_face),
         strength = 1,
         negative_prompt= negative_prompt,
-        mask_image = Image.fromarray(mask_crop),
+        mask_image = Image.fromarray(np.where(np.array(mask_crop) > 1, 255, np.array(mask_crop))),
         guidance_scale = guidance_scale,
         controlnet_conditioning_image = Image.fromarray(condition_crop),
         controlnet_conditioning_scale=controlnet_conditioning_scale,
@@ -134,7 +134,7 @@ def process_images(pipe, img, mask, condition_img, prompt, negative_prompt,num_i
         ).images[0]
 
         cropped_face.save('/content/cropped_face.png')
-        Image.fromarray(mask_crop).save('/content/cropped_mask_face.png')
+        Image.fromarray(Image.fromarray(np.where(np.array(mask_crop) > 1, 255, np.array(mask_crop)))).save('/content/cropped_mask_face.png')
         Image.fromarray(condition_crop).save('/content/cropped_cond_face.png')
         cropped_face = np.array(cropped_face)
 
