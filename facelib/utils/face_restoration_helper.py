@@ -3,7 +3,7 @@ import numpy as np
 import os
 import torch
 from torchvision.transforms.functional import normalize
-
+import numpy as np
 from facelib.detection import init_detection_model
 from facelib.parsing import init_parsing_model
 from facelib.utils.misc import img2tensor, imwrite, is_gray, bgr2gray, adain_npy
