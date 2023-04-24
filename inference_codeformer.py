@@ -134,7 +134,7 @@ def process_images(pipe, img, mask, condition_img, prompt, negative_prompt,num_i
         ).images[0]
 
         cropped_face.save('/content/cropped_face.png')
-        Image.fromarray(Image.fromarray(np.where(np.array(mask_crop) > 1, 255, np.array(mask_crop)))).save('/content/cropped_mask_face.png')
+        Image.fromarray(np.where(np.array(mask_crop) > 1, 255, np.array(mask_crop))).save('/content/cropped_mask_face.png')
         Image.fromarray(condition_crop).save('/content/cropped_cond_face.png')
         cropped_face = np.array(cropped_face)
 
