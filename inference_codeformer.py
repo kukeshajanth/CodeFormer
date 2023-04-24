@@ -133,9 +133,9 @@ def process_images(pipe, img, mask, condition_img, prompt, negative_prompt,num_i
         num_inference_steps=num_inference_steps
         ).images[0]
 
-        cropped_face.to_save('/content/cropped_face.png')
-        Image.fromarray(mask_crop).to_save('/content/cropped_mask_face.png')
-        Image.fromarray(condition_crop).to_save('/content/cropped_cond_face.png')
+        cropped_face.save('/content/cropped_face.png')
+        Image.fromarray(mask_crop).save('/content/cropped_mask_face.png')
+        Image.fromarray(condition_crop).save('/content/cropped_cond_face.png')
         cropped_face = np.array(cropped_face)
 
         cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
